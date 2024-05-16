@@ -1,6 +1,4 @@
-> #### 我加的群压根没人用这个功能，所以很多情况测试不到位，可能会有问题。
-> #### 欢迎提交issues(提交前确认是否使用最新版本)，有想加的功能也可以提。
-> #### 新版本需要更新openai: pip install openai==0.27.8
+> #### 国内的AI产品应该也能接入，如[智谱AI](https://open.bigmodel.cn/dev/api#openai_sdk)填一下API地址、模型、Key就可以用了。有不能接入的也可以提。
 ------
   
 # aichat-chatGPT
