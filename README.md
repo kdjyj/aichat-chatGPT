@@ -1,4 +1,6 @@
-> #### 国内的AI产品应该也能接入，如[智谱AI](https://open.bigmodel.cn/dev/api#openai_sdk)填一下API地址、模型、Key就可以用了。有不能接入的也可以提。
+> #### 国内的AI产品应该也能接入，如[智谱AI](https://open.bigmodel.cn/dev/api#openai_sdk)填一下API地址、模型、Key就可以用了。
+> #### [这个项目](https://github.com/Rlezzo/aichat)在本项目基础上更新了SDK并添加了一些功能，有需要可以去看看(太好了我可以开摆了)
+> #### 项目里头预设的那个猫娘在智谱AI可以正常使用，其他可能需要一些额外引导，推荐角色扮演使用智谱AI
 ------
   
 # aichat-chatGPT
@@ -69,9 +71,6 @@ aichat插件魔改GPT-3.5 API版本
 <br><br><br><br><br><br><br><br>
 
 ------
-  
-# TODO
-有空实现这个
-![0CCC2@19$E0_OB_~RMYW JR](https://user-images.githubusercontent.com/37209685/208008656-e4868ff6-006d-4018-a5b0-b337157ce58d.jpg)  
+
 
 
