@@ -1,5 +1,7 @@
+## 推荐使用[AstrBot](https://github.com/AstrBotDevs/AstrBot)
+
 # aichat-chatGPT
-  
+
 aichat插件魔改GPT-3.5 API版本  
   
 ## 命令(人格可换成会话)
