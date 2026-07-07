@@ -4,6 +4,7 @@ from hoshino import Service
 from hoshino.typing import CQEvent
 from . import Config
 from .client import Client
+from hoshino.tools import anti_conflict
 
 help_text = """命令(人格可以替换为会话)
 1. `创建人格/新建人格/设置人格+人格名+空格+设定`: 创建新人格或修改现有人格，注意人格名不能大于24位
@@ -17,7 +18,7 @@ help_text = """命令(人格可以替换为会话)
 9. `ai配置重载`: 重新加载配置文件，更新key等配置后使用
 """
 
-sv = Service('人工智障', enable_on_default=False, help_=help_text)
+sv = Service('ai对话', enable_on_default=False, help_=help_text)
 
 black_word = ['今天我是什么少女', 'ba来一井']  # 如果有不想触发的词可以填在这里
 
@@ -82,6 +83,7 @@ async def get_chat_response(group_id, prompt):
 
 
 @sv.on_message('group')
+@anti_conflict
 async def ai_reply(bot, context):
     msg = str(context['message'])
     if msg.startswith(f'[CQ:at,qq={context["self_id"]}]'):

@@ -5,13 +5,13 @@ import openai
 
 class Client:
     chat = openai.ChatCompletion()
-    model: str = "gpt-3.5-turbo"
+    model: str = "qwen3.6-flash"
     conversation: str = ""
     messages: list = []
     max_tokens: int = 1000
 
 
-    def __init__(self, api_key="", model="gpt-3.5-turbo", max_tokens=1000, proxy="", api_base="", api_type="open_ai", api_version=""):
+    def __init__(self, api_key="", model="qwen3.6-flash", max_tokens=1000, proxy="", api_base="", api_type="open_ai", api_version=""):
         self.chat.api_key = api_key
 
         if proxy.strip() != "":
