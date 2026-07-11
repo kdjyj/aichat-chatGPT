@@ -18,7 +18,8 @@ help_text = """命令(人格可以替换为会话)
 6. `对话记忆+on/off`: 开启/关闭对话记忆，不加则返回当前状态
 7. `删除会话+会话名` : 删除会话，不填则删除当前会话，默认会话不可删除
 8. `删除对话+条数`: 删除倒数N条对话，负数则是从第N条开始删除，不加条数则删除上一条。1条对话指一次问与答，不需要乘2。
-9. `ai配置重载`: 重新加载配置文件，更新key等配置后使用
+9. `思考模式+on/off`: 开启/关闭阿里云兼容接口的 `enable_thinking`
+10. `ai配置重载`: 重新加载配置文件，更新key等配置后使用
 """
 
 sv = Service('ai对话', enable_on_default=False, help_=help_text)
@@ -175,6 +176,27 @@ async def get_config(bot, ev):
     global config
     config = Config()
 
+
+@sv.on_prefix(('思考模式', '思考开关'))
+async def set_thinking_mode(bot, ev: CQEvent):
+    cfg = str(ev.message.extract_plain_text()).strip().lower()
+    if cfg in ('', 'status', 'state'):
+        await bot.send(ev, f"当前思考模式：{'开启' if config.enable_thinking else '关闭'}")
+        return
+
+    if cfg in ('on', 'true', '1', '开', '开启', 'enable'):
+        config.enable_thinking = True
+    elif cfg in ('off', 'false', '0', '关', '关闭', 'disable'):
+        config.enable_thinking = False
+    else:
+        await bot.send(ev, '参数错误，请输入 on/off 或 开/关')
+        return
+
+    config.save_config()
+    for client in group_clients.values():
+        client.enable_thinking = config.enable_thinking
+    await bot.send(ev, f"思考模式已{'开启' if config.enable_thinking else '关闭'}")
+
 def create_client(group_id):
     client = Client(
         random.choice(config.api_keys),
@@ -184,7 +206,8 @@ def create_client(group_id):
         config.api_base,
         config.api_type,
         config.api_version,
-        config.vision_model
+        config.vision_model,
+        config.enable_thinking
     )
     conversation = "default"
     if group_id in config.groups:

@@ -17,6 +17,7 @@ class Config:
     api_version : str = ""
     vision_model: str = "qwen3.6-flash"  # 视觉理解模型
     max_images: int = 3  # 单次最大图片数量
+    enable_thinking: bool = False  # 是否开启思考模式
 
     def __init__(self):
         self._config.read(os.path.join(os.path.dirname(__file__), 'config.ini'), encoding='utf-8')
@@ -33,6 +34,7 @@ class Config:
         self.api_version = self._config.get("OPTION", "api_version", fallback="")
         self.vision_model = self._config.get("OPTION", "vision_model", fallback="qwen3.6-flash")
         self.max_images = self._config.getint("OPTION", "max_images", fallback=3)
+        self.enable_thinking = self._config.getboolean("OPTION", "enable_thinking", fallback=False)
         items = self._config.items("GROUP")
         for item in items:
             if item[1] in self.conversations:
@@ -55,5 +57,6 @@ class Config:
             else:
                 self._config.set("GROUP", group, self.groups[group])
         self._config.set("OPTION", "record", str(self.record).lower())
+        self._config.set("OPTION", "enable_thinking", str(self.enable_thinking).lower())
         with open(os.path.join(os.path.dirname(__file__), 'config.ini'), 'w', encoding='utf-8') as f:
             self._config.write(f)

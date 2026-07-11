@@ -7,12 +7,13 @@ class Client:
     chat = openai.ChatCompletion()
     model: str = "qwen3.6-flash"
     vision_model: str = "qwen3.6-flash"
+    enable_thinking: bool = False
     conversation: str = ""
     messages: list = []
     max_tokens: int = 1000
 
 
-    def __init__(self, api_key="", model="qwen3.6-flash", max_tokens=1000, proxy="", api_base="", api_type="open_ai", api_version="", vision_model="qwen-vl-plus"):
+    def __init__(self, api_key="", model="qwen3.6-flash", max_tokens=1000, proxy="", api_base="", api_type="open_ai", api_version="", vision_model="qwen-vl-plus", enable_thinking=False):
         self.chat.api_key = api_key
 
         if proxy.strip() != "":
@@ -25,6 +26,7 @@ class Client:
         openai.api_type = api_type
         self.model = model
         self.vision_model = vision_model
+        self.enable_thinking = enable_thinking
         self.max_tokens = max_tokens
         self.conversation = "default"
         self.messages = [
@@ -35,23 +37,51 @@ class Client:
         self.conversation = conversation
         self.messages = message
 
+    def _request_kwargs(self, model_name):
+        kwargs = {
+            "model": model_name,
+            "engine": model_name if openai.api_type == "azure" else None,
+            "messages": self.messages,
+            "max_tokens": self.max_tokens,
+        }
+        if openai.api_type != "azure" and self.enable_thinking:
+            kwargs["extra_body"] = {"enable_thinking": True}
+        return kwargs
+
+    @staticmethod
+    def _extract_model_output(response):
+        choice = response.choices[0]
+        message = choice.message
+        content = getattr(message, "content", None)
+        if content is None and isinstance(message, dict):
+            content = message.get("content", "")
+        reasoning = getattr(message, "reasoning_content", None)
+        if reasoning is None and isinstance(message, dict):
+            reasoning = message.get("reasoning_content", "")
+        return (content or "").strip(), (reasoning or "").strip()
+
+    def _format_output(self, content, reasoning):
+        if self.enable_thinking and reasoning:
+            if content:
+                return f"思考内容：\n{reasoning}\n\n回复：\n{content}"
+            return f"思考内容：\n{reasoning}"
+        return content
+
     async def send(self, message, record=True):
         openai.api_key = self.chat.api_key
         self.messages.append({"role": "user", "content": message})
         try:
             response = await self.chat.acreate(
-                model=self.model,
-                engine=self.model if openai.api_type == "azure" else None,
-                messages=self.messages,
-                max_tokens=self.max_tokens,
+                **self._request_kwargs(self.model),
                 timeout=30
             )
             if response.choices[0]['finish_reason'] == "content_filter":
                 self.messages = self.messages[:-1]
                 return "由于敏感内容被过滤，未返回消息"
-            msg = response.choices[0].message.content.strip()
-            if msg and record:
-                self.messages.append({"role": "assistant", "content": msg})
+            content, reasoning = self._extract_model_output(response)
+            msg = self._format_output(content, reasoning)
+            if content and record:
+                self.messages.append({"role": "assistant", "content": content})
             else:
                 self.messages = self.messages[:-1]
 
@@ -96,19 +126,17 @@ class Client:
         
         try:
             response = await self.chat.acreate(
-                model=self.vision_model,
-                engine=self.vision_model if openai.api_type == "azure" else None,
-                messages=self.messages,
-                max_tokens=self.max_tokens,
+                **self._request_kwargs(self.vision_model),
                 timeout=60
             )
             if response.choices[0]['finish_reason'] == "content_filter":
                 self.messages = self.messages[:-1]
                 return "由于敏感内容被过滤，未返回消息"
-            msg = response.choices[0].message.content.strip()
-            if msg and record:
-                # 存储时将图片消息简化为文本描述，避免messages过大
-                self.messages.append({"role": "assistant", "content": msg})
+            content, reasoning = self._extract_model_output(response)
+            msg = self._format_output(content, reasoning)
+            if content and record:
+                # 存储时只记录最终回复，避免把推理内容写入上下文
+                self.messages.append({"role": "assistant", "content": content})
             else:
                 self.messages = self.messages[:-1]
             
