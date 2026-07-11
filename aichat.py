@@ -1,5 +1,8 @@
 import re
+import os
+import base64
 import random
+import urllib.request
 from hoshino import Service
 from hoshino.typing import CQEvent
 from . import Config
@@ -10,7 +13,7 @@ help_text = """命令(人格可以替换为会话)
 1. `创建人格/新建人格/设置人格+人格名+空格+设定`: 创建新人格或修改现有人格，注意人格名不能大于24位
 2. `查询人格/人格列表/获取人格`: 获取当前所有人格及当前人格
 3. `选择人格/切换人格/默认人格+人格名`: 切换到对应人格，不填则使用默认人格
-4. `/t+消息或@bot+消息`: 前面加上记住两字可以让关闭记忆功能的bot记住对话，记住两字不会放入对话
+4. `/t+消息或@bot+消息`: 前面加上记住两字可以让关闭记忆功能的bot记住对话，记住两字不会放入对话。支持发送图片进行识别。
 5. `重置人格/重置会话+人格名`: 重置人格，不填则重置当前人格，无当前人格则重置默认人格
 6. `对话记忆+on/off`: 开启/关闭对话记忆，不加则返回当前状态
 7. `删除会话+会话名` : 删除会话，不填则删除当前会话，默认会话不可删除
@@ -23,9 +26,149 @@ sv = Service('ai对话', enable_on_default=False, help_=help_text)
 black_word = ['今天我是什么少女', 'ba来一井']  # 如果有不想触发的词可以填在这里
 
 cq_code_pattern = re.compile(r'\[CQ:\w+,.+\]')
+image_pattern = re.compile(r'\[CQ:image[^\]]*\]')
+image_tag_pattern = re.compile(r'\[CQ:image(?:,([^\]]+))?\]')
 config = Config()
 group_clients = {}
 count = 0
+
+
+def extract_images_from_message(message_str):
+    """从CQ码消息字符串中提取图片信息
+    
+    Returns:
+        list: 图片信息列表，每项为 dict，包含 'url' 或 'file' 字段
+    """
+    images = []
+    matches = image_tag_pattern.finditer(message_str)
+    for match in matches:
+        params_str = match.group(1) or ""
+        params = {}
+        for param in params_str.split(","):
+            if "=" in param:
+                key, value = param.split("=", 1)
+                params[key] = value
+        
+        file_id = params.get("file", "")
+        url = params.get("url", "")
+        
+        image_info = {}
+        if url:
+            image_info["url"] = url
+        if file_id:
+            image_info["file"] = file_id
+        if image_info:
+            images.append(image_info)
+    return images
+
+
+def _to_data_uri(raw_bytes, file_name=""):
+    """将图片字节转换为 data URI。"""
+    ext = os.path.splitext(file_name)[1].lower()
+    mime = "image/jpeg"
+    if ext == ".png":
+        mime = "image/png"
+    elif ext == ".webp":
+        mime = "image/webp"
+    elif ext == ".gif":
+        mime = "image/gif"
+    encoded = base64.b64encode(raw_bytes).decode("utf-8")
+    return f"data:{mime};base64,{encoded}"
+
+
+def _download_as_data_uri(url):
+    """下载远程图片并转换为 data URI。"""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = resp.read()
+        return _to_data_uri(data)
+    except Exception:
+        return None
+
+
+async def get_image_data(bot, image_info):
+    """将图片信息转换为API可用的格式
+    
+    Returns:
+        str: 图片URL或base64 data URI
+    """
+    image_url = image_info.get("url", "")
+    file_id = image_info.get("file", "")
+
+    # 优先使用可下载 URL，转换为 data URI，避免模型端下载失败
+    if image_url and image_url.startswith("http"):
+        data_uri = _download_as_data_uri(image_url)
+        if data_uri:
+            return data_uri
+
+    # 通过 OneBot 接口获取图片真实路径/URL
+    if file_id and bot is not None:
+        try:
+            image_info_resp = await bot.get_image(file=file_id)
+            local_file = image_info_resp.get("file", "")
+            remote_url = image_info_resp.get("url", "")
+
+            if local_file and os.path.exists(local_file):
+                with open(local_file, "rb") as f:
+                    return _to_data_uri(f.read(), local_file)
+
+            if remote_url and remote_url.startswith("http"):
+                data_uri = _download_as_data_uri(remote_url)
+                if data_uri:
+                    return data_uri
+        except Exception:
+            pass
+
+    # 回退本地路径尝试
+    if file_id:
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), "data", "image", file_id),
+            os.path.join(os.path.dirname(__file__), file_id),
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    return _to_data_uri(f.read(), path)
+
+    # 最后回退 URL 直传（若为公网可访问地址仍可用）
+    if image_url and image_url.startswith("http"):
+        return image_url
+    if file_id.startswith("http"):
+        return file_id
+    return None
+
+
+async def process_images(bot, message_str, max_images=3):
+    """从消息中提取并处理图片
+    
+    Args:
+        message_str: 原始CQ码消息字符串
+        max_images: 最大图片数量
+        
+    Returns:
+        tuple: (图片URL列表, 去除图片CQ码后的纯文本)
+    """
+    images_info = extract_images_from_message(message_str)
+    
+    if not images_info:
+        return [], message_str
+    
+    # 限制图片数量
+    if len(images_info) > max_images:
+        images_info = images_info[:max_images]
+    
+    image_urls = []
+    for img_info in images_info:
+        url = await get_image_data(bot, img_info)
+        if url:
+            image_urls.append(url)
+    
+    # 去除图片CQ码，保留纯文本
+    text = image_pattern.sub("", message_str).strip()
+    
+    return image_urls, text
+
 
 @sv.on_fullmatch('AI配置重载')
 async def get_config(bot, ev):
@@ -40,7 +183,8 @@ def create_client(group_id):
         config.proxy,
         config.api_base,
         config.api_type,
-        config.api_version
+        config.api_version,
+        config.vision_model
     )
     conversation = "default"
     if group_id in config.groups:
@@ -53,7 +197,7 @@ def create_client(group_id):
     return
 
 
-async def get_chat_response(group_id, prompt):
+async def get_chat_response(group_id, prompt, image_urls=None):
     group_id = str(group_id)
     record = config.record
     if not record and prompt.startswith("记住"):
@@ -66,7 +210,10 @@ async def get_chat_response(group_id, prompt):
     client: Client = group_clients[group_id]
     client.chat.api_key = api_key
     try:
-        msg = await client.send(prompt, record)
+        if image_urls:
+            msg = await client.send_with_images(prompt, image_urls, record)
+        else:
+            msg = await client.send(prompt, record)
         if record:
             config.conversations[client.conversation] = client.messages
             config.groups[group_id] = client.conversation
@@ -87,11 +234,16 @@ async def get_chat_response(group_id, prompt):
 async def ai_reply(bot, context):
     msg = str(context['message'])
     if msg.startswith(f'[CQ:at,qq={context["self_id"]}]'):
-        text = re.sub(cq_code_pattern, '', msg).strip()
-        if text == '' or text in black_word:
+        # 提取图片
+        image_urls, text = await process_images(bot, msg, config.max_images)
+        text = re.sub(cq_code_pattern, '', text).strip()
+        if text == '' and not image_urls:
+            return
+        if text in black_word:
             return
         try:
-            msg = await get_chat_response(context["group_id"], text)
+            prompt = text if text else "图片是"
+            msg = await get_chat_response(context["group_id"], prompt, image_urls if image_urls else None)
             if msg:
                 await bot.send(context, msg, at_sender=False)
         except Exception as err:
@@ -100,11 +252,17 @@ async def ai_reply(bot, context):
 
 @sv.on_prefix('/t')
 async def ai_reply_prefix(bot, ev: CQEvent):
-    text = str(ev.message.extract_plain_text()).strip()
-    if text == '' or text in black_word:
+    raw_msg = str(ev['message'])
+    # 提取图片
+    image_urls, text = await process_images(bot, raw_msg, config.max_images)
+    text = text.strip()
+    if text == '' and not image_urls:
+        return
+    if text in black_word:
         return
     try:
-        msg = await get_chat_response(ev.group_id, text)
+        prompt = text if text else "请描述这张图片"
+        msg = await get_chat_response(ev.group_id, prompt, image_urls if image_urls else None)
         if msg:
             await bot.send(ev, msg)
     except Exception as err:

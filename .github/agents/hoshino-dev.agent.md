@@ -50,6 +50,8 @@ aichat-chatGPT/
 
 ## 待实现功能路线图
 
+> 详细工作计划文档位于 `docs/` 目录下，实现前请先阅读对应文档。
+
 ### 1. OpenAI SDK 升级（基础）
 - 迁移到 `openai>=1.0`（`AsyncOpenAI` 客户端替代旧版 `ChatCompletion.acreate`）
 - 更新 `client.py` 全部API调用方式
@@ -57,6 +59,7 @@ aichat-chatGPT/
 - 更新 `requirements` / `pip install` 说明
 
 ### 2. Function Calling 工具调用
+- 📄 详细计划: `docs/function-calling-plan.md`
 - 在 `client.py` 中定义 tools 描述（JSON Schema）
 - 处理 `finish_reason: "tool_calls"` 响应
 - 实现工具注册机制（可扩展的工具列表）
@@ -64,25 +67,45 @@ aichat-chatGPT/
 - 在 `aichat.py` 中添加工具管理命令
 
 ### 3. Vision 图片理解
+- 📄 详细计划: `docs/vision-plan.md`
 - 从CQ码中提取 `[CQ:image,file=xxx]` 图片数据
 - 支持本地图片 base64 编码和URL图片
 - 使用支持vision的模型（如 `gpt-4o`）
 - 构建多模态 messages 格式（text + image_url）
 
 ### 4. 群聊上下文感知
+- 📄 详细计划: `docs/context-awareness-plan.md`
 - 缓存群内最近N条消息（非@触发的也记录）
 - @触发或 `/t` 触发时，将上下文消息组装进 prompt
 - 可配置上下文窗口大小（config.ini）
 - 区分不同发言者（QQ号→昵称映射）
 
 ### 5. 好感度/长期记忆系统
+- 📄 详细计划: `docs/affection-memory-plan.md`
 - 设计成员级存储结构（per-group per-member）
 - 好感度数值系统（互动增减）
 - 长期记忆：从对话中自动提取关键信息并存储
 - 定期总结机制（避免记忆无限增长）
 - 在 system prompt 中注入相关记忆
 
+## 文档目录
+
+```
+docs/
+├── function-calling-plan.md    # Function Calling 工具调用工作计划
+├── vision-plan.md              # Vision 图片理解工作计划
+├── context-awareness-plan.md   # 群聊上下文感知工作计划
+└── affection-memory-plan.md    # 好感度/长期记忆系统工作计划
+```
+
+每个文档包含：功能概述、技术方案、实现步骤（含 checklist）、涉及文件、测试要点、注意事项。
+
 ## 实现指南
+
+### 开始新功能前
+1. **先阅读 `docs/` 下对应的工作计划文档**
+2. 按文档中的 Phase 顺序逐步实现
+3. 每完成一个 Phase 更新文档中的 checklist
 
 ### 修改 client.py 时
 1. 先阅读完整的当前实现

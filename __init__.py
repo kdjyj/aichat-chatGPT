@@ -15,6 +15,8 @@ class Config:
     api_base : str = ""
     api_type : str = "open_ai"
     api_version : str = ""
+    vision_model: str = "qwen3.6-flash"  # 视觉理解模型
+    max_images: int = 3  # 单次最大图片数量
 
     def __init__(self):
         self._config.read(os.path.join(os.path.dirname(__file__), 'config.ini'), encoding='utf-8')
@@ -29,6 +31,8 @@ class Config:
         self.api_base = self._config.get("OPTION", "api_base", fallback="")
         self.api_type = self._config.get("OPTION", "api_type", fallback="open_ai")
         self.api_version = self._config.get("OPTION", "api_version", fallback="")
+        self.vision_model = self._config.get("OPTION", "vision_model", fallback="qwen3.6-flash")
+        self.max_images = self._config.getint("OPTION", "max_images", fallback=3)
         items = self._config.items("GROUP")
         for item in items:
             if item[1] in self.conversations:
